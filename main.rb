@@ -141,8 +141,8 @@ mean97 = masterDataSet['grav97'].mean
 puts mean97
 # subtract mean from each element
 masterDataSet['grav97'].map! {|x| x - mean97}
-#find offset so plots don't overlap
-offset = masterDataSet['grav95'].max - masterDataSet['grav97'].min
+#apply static offset so plots don't overlap
+offset = 2000
 #apply offset to each element
 masterDataSet['grav97'].map! {|x| x + offset}
 
@@ -156,7 +156,7 @@ gnuconf = File.open('gnuplot_script.conf','w')
 gnuconf.print %Q/set terminal png size 1600,900
 set xdata time
 set timefmt "%Y-%m-%d-%H:%M:%S"
-set output "gphone_plots.png"
+set output "gPhoneComparisonPlot.png"
 set xrange ["#{masterDataSet['time'][0]}":"#{masterDataSet['time'][masterDataSet['time'].size-1]}"]
 set grid
 set xlabel "Date\\nTime"
