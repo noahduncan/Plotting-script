@@ -146,12 +146,14 @@ offset = 2000
 #apply offset to each element
 masterDataSet['grav97'].map! {|x| x + offset}
 
+puts "Writing datafile (plot_data.csv)..."
 fout = File.open("plot_data.csv",'w')
 for n in 1..masterDataSet['time'].size do
   fout.puts "#{masterDataSet['time'][n]} #{masterDataSet['grav95'][n]} #{masterDataSet['grav97'][n]}"
 end
 fout.close
 
+puts "Creating gnuplot script..."
 gnuconf = File.open('gnuplot_script.conf','w')
 gnuconf.print %Q/set terminal png size 1600,900
 set xdata time
@@ -168,8 +170,10 @@ plot 'plot_data.csv' using 1:2 index 0 title "gPhone-95(Boulder, CO)" with lines
 screendump/
 gnuconf.close
 
+puts "Running script to gnuplot..."
 `gnuplot < gnuplot_script.conf`
 
+puts "Uploading image via ftp..."
 `ftp -s:ftp.txt ftp.microglacoste.com`
 
 =begin
