@@ -1,0 +1,4 @@
+microgla
+microg422
+cd public_html
+put ./gPhoneComparisonPlot.png

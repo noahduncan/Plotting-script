@@ -19,7 +19,7 @@ class DataSet
     @now = Time.new
     @today = Date.today
     @filenames = Array.new
-    i=2
+    i=1
     while i <= 7 do
       @filenames << "#{@now.getgm.year}_#{"%03d" % (@now.getgm.yday.to_i-i)}_#{@meterName}.tsf"
       i+=1
@@ -169,6 +169,8 @@ screendump/
 gnuconf.close
 
 `gnuplot < gnuplot_script.conf`
+
+`ftp -s:ftp.txt ftp.microglacoste.com`
 
 =begin
 #open and parse files
