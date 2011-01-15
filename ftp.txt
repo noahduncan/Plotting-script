@@ -1,0 +1,7 @@
+microgla
+microg422
+cd public_html
+binary
+put c:/noahs_scripts/gphone_plotter/gPhoneComparisonPlot.png
+bye
+
