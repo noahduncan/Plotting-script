@@ -1,90 +1,5 @@
 require 'time'
 require 'date'
-
-
-class UserInput
-  attr_reader :ftp_server,:data_path,:plot_path,:quiet,:start_date,:end_date,:meters
-  def initialize
-    @errors = []
-    @meters = {}
-    parse_args unless $*.nil?
-    raise_exceptions unless @errors.empty?
-    set_defaults
-  end
-  
-  def parse_args
-    $*.each do |a|
-      parts = a.split('=')
-      if a.match /^(-)/
-        case parts[0]
-        when "--ftp", "-f"
-          @ftp_server = parts[1]
-        when "--datafile", "-d"
-          @data_path = parts[1]
-        when "--plotname", "-p"
-          @plot_path = parts[1]
-        when "--quiet", "-q"
-          @quiet = true
-        when "--help", "-h", "-?"
-          help
-          exit
-        end
-      else
-        parts = a.split "@"
-        if parts[1].nil?
-          parts = a.split ":"
-          @start_date ||= Date.parse parts[0]
-          @end_date ||= Date.parse parts[1]
-        else
-          unless parts[1].match(/^\d\d?\d?\.\d\d?\d?.\d\d?\d?.\d\d?\d?$/)
-            @errors = ["Invalid gPhone ip address"] 
-            next
-          end
-          @meters[parts[0].to_s] = parts[1]
-        end
-      end
-    end
-  end
-  
-  def raise_exceptions
-    @errors.map {|e| puts "Error: #{e}"}
-    exit
-  end
-      
-  def set_defaults
-    @start_date ||= Date.today
-    @end_date ||= @start_date - 7
-    @data_path ||= ""
-    @plot_path ||= ""
-    @quiet ||= false
-  end
-    
-  def help
-    print "usage: ruby gphone_plotter.rb [-f|--ftp=server_ip] [-d|datafile=path] [-p|--plotname=path]
-     [-q|--quiet] [-?|-h|--help] [meter_name@server_ip]... [start_date:end_date]
-    
-    This program takes the specified meters and servers from the user, downloads
-    the necessary files (if found), plots the results, and (optionally) uploads the
-    file to an ftp site.
-    
-    Modifiers:
-      start_date, end_date      Time period to plot.  Default is 
-                                7 days w/today as most recent
-                                
-      -f, --ftp=server_ip       If desired, the ftp server to upload the plot to.
-                                
-      -d, --datafile=path       path to where you want the data file saved
-      
-      -p, --plotname=path       Path to where you want the plot to be saved
-      
-      -q, --quiet               Force defaults, no prompts.
-      
-      -h, -?, --help            Display this help message
-      
-      "
-  end
-end
-
 class Array
   def sum
     inject(0.0) { |result, el| result + el }
@@ -95,39 +10,90 @@ class Array
   end
 end
 
-class Tsf_file
-  attr_reader :name
+class DataSet
+  attr_accessor :meterName, :server, :filenames
   
-  def initialize(name)
-    @f = File.open(name,"r")
-    @name = name
+  def initialize(meterName, server)
+    @meterName = meterName
+    @server = server
+    @now = Time.new
+    @today = Date.today
+    @filenames = Array.new
+    i=1
+    while i <= 7 do
+      @filenames << "#{@now.getgm.year}_#{"%03d" % (@now.getgm.yday.to_i-i)}_#{@meterName}.tsf"
+      i+=1
+    end
   end
   
-  def get_all_data
-    output = []
+  def downloadSet
+    @filenames.each do |filename|
+      #download the .tsf files from the gphone computers using wget
+      if File.exist?(filename)
+        puts "#{filename} exists: skipping download."
+      else
+        puts "Downloading: \"#{server}/gmonitor_data/#{filename}\""
+        `wget --user=mgl_admin --password=gravity \"#{server}/gmonitor_data/#{filename}\"`
+      end
+    end
+  end
+  
+  def deleteOldFiles
+    datafilenames = Dir.glob("*#{@meterName}.tsf")
+    datafilenames.each do |datafilename|
+      filenameparts = datafilename.split("_")
+      file_date = Date.parse("#{filenameparts[0]}-#{filenameparts[1]}")
+      if @today - file_date > 7
+        puts "Deleting: #{datafilename}"
+        File.delete(datafilename)
+      end
+    end
+  end
+  
+  def getDataArray
+    @dataArray = Hash.new
+    @filenames.each do |filename|
+      f = File.open(filename,'r')
+      puts "Processing #{filename}..."
+      @dataArray[filename[0..7]] = []
+      until f.eof
+        cols = parse_str(f.gets)
+        @dataArray[filename[0..7]] << cols unless cols === false
+      end
+    end
+    @dataArray
+  end
+
+  private
+  def parse_str(data_str)
+    return false unless data_str.match /^\d/
+    cols =  data_str.split(" ")
+    cor_grav = cols[6].to_f - cols[8].to_f
+    output = [cols[0..2].join('-') + "-" + cols[3..5].join(":"), cor_grav]
+    return output
+  end
+end
+
+class TsfData < DataSet
+  def initialize()
+    @f = File.open(@name,"r")
+  end
+  
+  def all_data
+    output = Array.new
     @f.rewind
     @f.each do |row|
       output << row.split
     end
-    output
+    return output
   end
   
-  def get_time_and_corrected_gravity_data
-    output = []
+  def extractData
     @f.rewind
-    until @f.eof 
-      cols = parse_row(@f.gets)
-      output << cols unless cols === false
+    @f.each do |row|
+      cols = parse_str(row)
+      output[cols[0][0..9]] << cols
     end
-    output
-  end
-
-  private
-  def parse_row(data_str)
-    return false unless data_str.match /^\d/
-    cols =  data_str.split
-    cor_grav = cols[6].to_f - cols[8].to_f
-    output = [cols[0..2].join('-') + "-" + cols[3..5].join(":"), cor_grav]
     return output
   end
   #Too modular.  I think i can get away with just 
@@ -137,99 +103,26 @@ class Tsf_file
   #-rebuild data set
   #---process each file
   #-----parse out data
+  #-----overwrite data file
 end
+#determine file name prefix for downloads
+# now = Time.new
+# file_prefix = "#{now.getgm.year}_#{"%03d" % (now.getgm.yday-1)}_"
 
-class DataSet
-  attr_accessor :meterName, :server, :filenames
-  attr_reader :data_array
-  
-  def initialize(meterName, server, start_date, end_date)
-    @@now ||= Time.new
-    @@today ||= Date.parse(@@now.getgm.to_s)
-    @meterName = meterName
-    @server = server
-    @start_date = start_date
-    @end_date = end_date
-    @filenames = {}
-    @data_array = []
+data95 = DataSet.new("gPhone 095", "10.0.1.119")
+data97 = DataSet.new("gPhone 097", "216.254.148.51")
 
-    i=1
-    while i <= (@end_date-@start_date).to_i do
-      file_prefix = "#{(@@today-i).year}_#{"%03d" % (@@today-i).yday.to_i}"
-      puts file_prefix
-      @filenames[file_prefix] = "#{file_prefix}_#{@meterName}.tsf"
-      i+=1
-    end
-  end
-  
-  def +(otherset)
-    @data_array.concat otherset.data_array[1]
-  end
-  
-  def download_data_files
-    @files.each do |file|
-      #download the .tsf files from the gphone computers using wget
-      if File.exist?(file.name)
-        puts "#{file.name} exists: skipping download."
-      else
-        puts "Downloading: \"#{@server}/gmonitor_data/#{file.name}\""
-        `wget --user=mgl_admin --password=gravity \"#{@server}/gmonitor_data/#{file.name}\"`
-      end
-    end
-  end
-  
-  def delete_irrelevant_data_files
-    shell_file_names = Dir.glob("*#{meter_name}.tsf")
-    @files.each do |file|
-      unless shell_file_names.include? file.name
-        puts "Deleting: #{file.name}"
-        File.delete(file.name)
-      end
-    end
-  end
-  
-  def process_files
-    @files.each do |file|
-      puts "Processing #{file.name}..."
-      file.get_time_and_corrected_gravity_data.each do |arr_row|
-        @data_arr << arr_row
-      end
-    end
-  end
-  
-end
-
-
-user_data = UserInput.new
-
-# puts user_data.inspect
-
-data_sets = []
-user_data.meters.each do |name,server|
-  data_sets << DataSet.new(name,server, user_data.start_date, user_data.end_date)
-  puts data_sets[data_sets.size-1].inspect
-end
-
-
-# data_sets.each do |data_set|
-#   data_set.download_data_files
-#   data_set.delete_irrelevant_data_files
-#   data_set.process_files
-# end
-
-=begin
 #download missing files:
-data95.download_data_files
-data97.download_data_files
+data95.downloadSet
+data97.downloadSet
 
-data95.delete_data_files
-data97.delete_data_files
+data95.deleteOldFiles
+data97.deleteOldFiles
 
-arr95=data95.getDataArray.transpose
-arr97=data97.getDataArray.transpose
+arr95=data95.getDataArray
+arr97=data97.getDataArray
 
-data_sets.each do |data_set|
-end
+masterDataSet = {'time'=>[],'grav95'=>[],'grav97'=>[]}
 
 data95.filenames.sort.each do |filename|
   masterDataSet['time'].concat(arr95[filename[0..7]].transpose[0])
@@ -267,6 +160,7 @@ set xdata time
 set timefmt "%Y-%m-%d-%H:%M:%S"
 set output "gPhoneComparisonPlot.png"
 set xrange ["#{masterDataSet['time'][0]}":"#{masterDataSet['time'][masterDataSet['time'].size-1]}"]
+set yrange [-1500:3500]
 set grid
 set xlabel "Date\\nTime"
 set ylabel "Acceleration"
@@ -283,4 +177,45 @@ puts "Running script to gnuplot..."
 puts "Uploading image via ftp..."
 `ftp -s:ftp.txt ftp.microglacoste.com`
 
+=begin
+#open and parse files
+new95 = File.new("#{file_prefix}gPhone 095.tsf","r")
+new97 = File.new("#{file_prefix}gPhone 097.tsf","r")
+time = Array.new
+grav1 = Array.new
+grav2 = Array.new
+while(!new97.eof?)
+  row95 = new95.gets
+  row97 = new97.gets
+  entry = parse_str(row95,row97)
+  
+  next if entry == false
+  time << entry[0]
+  grav1 << entry[1]
+  grav2 << entry[2]
+end
+new95.close
+new97.close
+
+# find mean
+g1mean = grav1.mean
+puts g1mean
+# subtract mean from each element
+grav1.map! {|x| x - g1mean}
+
+#find mean
+g2mean = grav2.mean
+puts g2mean
+# subtract mean from each element
+grav2.map! {|x| x - g2mean}
+#find offset so plots don't overlap
+offset = grav1.max - grav2.min
+#apply offset to each element
+grav2.map! {|x| x + offset}
+
+fout = File.open("plot_data.csv",'w')
+for n in 1..time.size do
+  fout.puts "#{time[n]} #{grav1[n]} #{grav2[n]}"
+end
+fout.close
 =end
