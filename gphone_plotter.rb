@@ -13,6 +13,7 @@ class UserInput
   end
   
   def parse_args
+    help if $*.empty?
     $*.each do |a|
       parts = a.split('=')
       if a.match /^(-)/
@@ -27,7 +28,6 @@ class UserInput
           @quiet = true
         when "--help", "-h", "-?"
           help
-          exit
         end
       else
         parts = a.split "@"
@@ -35,8 +35,9 @@ class UserInput
           parts = a.split ":"
           @start_date ||= Date.parse parts[0]
           @end_date ||= Date.parse parts[1]
+          puts @end_date
         else
-          unless parts[1].match(/^\d\d?\d?\.\d\d?\d?.\d\d?\d?.\d\d?\d?$/)
+          unless parts[1].match(/^\d\d?\d?\.\d\d?\d?\.\d\d?\d?\.\d\d?\d?$/)
             @errors = ["Invalid gPhone ip address"] 
             next
           end
@@ -52,8 +53,8 @@ class UserInput
   end
       
   def set_defaults
-    @start_date ||= Date.today
-    @end_date ||= @start_date - 7
+    @end_date ||= Date.today - 1
+    @start_date ||= @end_date - 7
     @data_path ||= ""
     @plot_path ||= ""
     @quiet ||= false
@@ -82,6 +83,7 @@ class UserInput
       -h, -?, --help            Display this help message
       
       "
+      exit
   end
 end
 
@@ -95,7 +97,7 @@ class Array
   end
 end
 
-class Tsf_file
+class TsfFile
   attr_reader :name
   
   def initialize(name)
@@ -143,27 +145,29 @@ class DataSet
   attr_accessor :meterName, :server, :filenames
   attr_reader :data_array
   
-  def initialize(meterName, server, start_date, end_date)
+  def initialize(meterName, server, start_date=nil, end_date=nil)
     @@now ||= Time.new
     @@today ||= Date.parse(@@now.getgm.to_s)
     @meterName = meterName
     @server = server
     @start_date = start_date
     @end_date = end_date
-    @filenames = {}
+    @files = []
     @data_array = []
-
-    i=1
-    while i <= (@end_date-@start_date).to_i do
-      file_prefix = "#{(@@today-i).year}_#{"%03d" % (@@today-i).yday.to_i}"
-      puts file_prefix
-      @filenames[file_prefix] = "#{file_prefix}_#{@meterName}.tsf"
-      i+=1
+    
+    unless server.nil?
+      i=0
+      while i < (@end_date-@start_date).to_i.abs do
+        file_prefix = "#{(@end_date-i).year}_#{"%03d" % (@end_date-i).yday.to_i}"
+        puts file_prefix
+        @files << TsfFile.new("#{file_prefix}_#{@meterName}.tsf")
+        i+=1
+      end
     end
   end
   
   def +(otherset)
-    @data_array.concat otherset.data_array[1]
+    @data_array.empty? ? @data_array = otherset.data_array : @data_array |= otherset.data_array[1]
   end
   
   def download_data_files
@@ -179,7 +183,7 @@ class DataSet
   end
   
   def delete_irrelevant_data_files
-    shell_file_names = Dir.glob("*#{meter_name}.tsf")
+    shell_file_names = Dir.glob("*#{meterName}.tsf")
     @files.each do |file|
       unless shell_file_names.include? file.name
         puts "Deleting: #{file.name}"
@@ -192,7 +196,7 @@ class DataSet
     @files.each do |file|
       puts "Processing #{file.name}..."
       file.get_time_and_corrected_gravity_data.each do |arr_row|
-        @data_arr << arr_row
+        @data_array << arr_row
       end
     end
   end
@@ -210,12 +214,18 @@ user_data.meters.each do |name,server|
   puts data_sets[data_sets.size-1].inspect
 end
 
+master_set = []
+data_sets.each do |data_set|
+  data_set.download_data_files
+  data_set.delete_irrelevant_data_files
+  data_set.process_files
+  master_set |= data_set.data_array
+end
 
-# data_sets.each do |data_set|
-#   data_set.download_data_files
-#   data_set.delete_irrelevant_data_files
-#   data_set.process_files
-# end
+out = File.new("sample.txt","w")
+master_set.each do |row|
+  out.puts row.join(" ")
+end
 
 =begin
 #download missing files:
