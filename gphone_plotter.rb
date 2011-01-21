@@ -6,7 +6,7 @@ class UserInput
   attr_reader :ftp_server,:data_path,:plot_path,:quiet,:start_date,:end_date,:meters
   def initialize
     @errors = []
-    @meters = {}
+    @meters = []
     parse_args unless $*.nil?
     raise_exceptions unless @errors.empty?
     set_defaults
@@ -15,8 +15,34 @@ class UserInput
   def parse_args
     help if $*.empty?
     $*.each do |a|
-      parts = a.split('=')
-      if a.match /^(-)/
+      case a
+      when /^'/
+        meter_hash = {}
+        part = a.match(/'.*'/)[0]
+        meter_hash['name'] = part[1..(part.size-2)]
+        meter_hash['server'] = a.match(/\d\d?\d?\.\d\d?\d?\.\d\d?\d?\.\d\d?\d?/)[0]
+        unless meter_hash['server']
+          @errors = ["Invalid gPhone ip address"] 
+          next
+        end
+        a.scan(/-[uPl]=[^\s.]*/).each do |arg|
+          parts = arg.split '='
+          case parts[0]
+          when "--user", "-u"
+            meter_hash['user'] = parts[1]
+          when "--password", "-P"
+            meter_hash['password'] = parts[1] 
+          when "--location", "-l"
+            meter_hash['location'] = parts[1]
+          end
+        end
+        @meters << meter_hash
+      when /:/
+        parts = a.split ":"
+        @start_date ||= Date.parse parts[0]
+        @end_date ||= Date.parse parts[1]
+      else
+        parts = a.split('=')
         case parts[0]
         when "--ftp", "-f"
           @ftp_server = parts[1]
@@ -29,22 +55,9 @@ class UserInput
         when "--help", "-h", "-?"
           help
         end
-      else
-        parts = a.split "@"
-        if parts[1].nil?
-          parts = a.split ":"
-          @start_date ||= Date.parse parts[0]
-          @end_date ||= Date.parse parts[1]
-          puts @end_date
-        else
-          unless parts[1].match(/^\d\d?\d?\.\d\d?\d?\.\d\d?\d?\.\d\d?\d?$/)
-            @errors = ["Invalid gPhone ip address"] 
-            next
-          end
-          @meters[parts[0].to_s] = parts[1]
-        end
-      end
+      end 
     end
+    puts @meters.inspect
   end
   
   def raise_exceptions
@@ -62,7 +75,7 @@ class UserInput
     
   def help
     print "usage: ruby gphone_plotter.rb [-f|--ftp=server_ip] [-d|datafile=path] [-p|--plotname=path]
-     [-q|--quiet] [-?|-h|--help] [meter_name@server_ip]... [start_date:end_date]
+     [-q|--quiet] [-?|-h|--help] [\"meter_name@server_ip -u|-user -P|--password -l|--location\"]... [start_date:end_date]
     
     This program takes the specified meters and servers from the user, downloads
     the necessary files (if found), plots the results, and (optionally) uploads the
@@ -72,7 +85,14 @@ class UserInput
       start_date, end_date      Time period to plot.  Default is 
                                 7 days w/today as most recent
                                 
-      -f, --ftp=server_ip       If desired, the ftp server to upload the plot to.
+       ___________________FTP_SERVER_CONFIGURATION_________________________________
+      |                                                                            |
+      |--ftp-server=             If desired, the ftp server to upload the plot to. |
+      |                                                                            |
+      |--ftp-user=               Ftp server username                               |
+      |                                                                            |
+      |--ftp-password=           Ftp server password                               |
+      |____________________________________________________________________________|
                                 
       -d, --datafile=path       path to where you want the data file saved
       
@@ -81,6 +101,12 @@ class UserInput
       -q, --quiet               Force defaults, no prompts.
       
       -h, -?, --help            Display this help message
+      
+      -u, --user=               Username required to access meter's files
+      
+      -P, --password            Password required to access meter's files
+      
+      -l, --location            Location of meter
       
       "
       exit
@@ -105,12 +131,24 @@ class TsfFile
     @name = name
   end
   
-  def get_all_data
+  def get_data(cols="all")
     output = []
     @f.rewind
-    @f.each do |row|
-      output << row.split
-    end
+    if cols == "all"
+      @f.each do |row|
+        output << row.split
+      end
+    else
+      @f.each do |row|
+        next unless row.match /^\d/
+        f_cols = row.split
+        out_row = ""
+        cols.each do |col|
+          out_row << "#{f_cols[col]} "
+        end
+        output << out_row
+      end
+    end        
     output
   end
   
@@ -124,6 +162,26 @@ class TsfFile
     output
   end
 
+  def check_data_integrity
+    f_seconds = get_data([5])
+    second_count = -1
+    f_seconds.each do |f_second|
+      # puts "f_second: #{f_second.to_i ==  0}  second_count:#{second_count == -1}"
+      if f_second.to_i == 0
+        unless (second_count % 60 == 59 || second_count == -1)
+          puts "Data integrity check failed in #{@name}:line #{second_count+47}"
+          exit
+        end
+      else
+        unless (second_count+1) % 60 == f_second.to_i 
+          puts "Data integrity check failed in #{@name}:line #{second_count+47}"
+          exit
+        end
+      end
+      second_count += 1
+    end    
+  end
+  
   private
   def parse_row(data_str)
     return false unless data_str.match /^\d/
@@ -142,10 +200,10 @@ class TsfFile
 end
 
 class DataSet
-  attr_accessor :meterName, :server, :filenames
+  attr_accessor :meterName, :server, :files, :location
   attr_reader :data_array
   
-  def initialize(meterName, server, start_date=nil, end_date=nil)
+  def initialize(meterName, server, start_date, end_date, user = nil, password = nil, location = nil)
     @@now ||= Time.new
     @@today ||= Date.parse(@@now.getgm.to_s)
     @meterName = meterName
@@ -154,15 +212,20 @@ class DataSet
     @end_date = end_date
     @files = []
     @data_array = []
+    @user = user
+    @password = password
+    @location = location
     
-    unless server.nil?
-      i=0
-      while i < (@end_date-@start_date).to_i.abs do
-        file_prefix = "#{(@end_date-i).year}_#{"%03d" % (@end_date-i).yday.to_i}"
-        puts file_prefix
-        @files << TsfFile.new("#{file_prefix}_#{@meterName}.tsf")
-        i+=1
+    i=0
+    while i <= (@end_date-@start_date).to_i.abs do
+      filename = "#{(@end_date-i).year}_#{"%03d" % (@end_date-i).yday.to_i}_#{@meterName}.tsf"
+      if File.file?(filename)
+        puts "#{filename} exists: skipping download."
+      else
+        download_data_file(filename)
       end
+      @files << TsfFile.new(filename)
+      i+=1
     end
   end
   
@@ -170,16 +233,10 @@ class DataSet
     @data_array.empty? ? @data_array = otherset.data_array : @data_array |= otherset.data_array[1]
   end
   
-  def download_data_files
-    @files.each do |file|
-      #download the .tsf files from the gphone computers using wget
-      if File.exist?(file.name)
-        puts "#{file.name} exists: skipping download."
-      else
-        puts "Downloading: \"#{@server}/gmonitor_data/#{file.name}\""
-        `wget --user=mgl_admin --password=gravity \"#{@server}/gmonitor_data/#{file.name}\"`
-      end
-    end
+  def download_data_file(filename)
+    #download the .tsf file from the gphone computers using wget
+    puts "Downloading: \"#{@server}/gmonitor_data/#{filename}\""
+    `wget --user=#{@user} --password=#{@password} \"#{@server}/gmonitor_data/#{filename}\"`
   end
   
   def delete_irrelevant_data_files
@@ -195,102 +252,94 @@ class DataSet
   def process_files
     @files.each do |file|
       puts "Processing #{file.name}..."
-      file.get_time_and_corrected_gravity_data.each do |arr_row|
-        @data_array << arr_row
+      # puts "\tChecking Data Integrity..."
+      # file.check_data_integrity
+      puts "\tExtracting Corrected Gravity Data..."
+      file.get_time_and_corrected_gravity_data.each do |row|
+        @data_array << row
       end
     end
   end
   
 end
 
-
 user_data = UserInput.new
 
 # puts user_data.inspect
 
 data_sets = []
-user_data.meters.each do |name,server|
-  data_sets << DataSet.new(name,server, user_data.start_date, user_data.end_date)
-  puts data_sets[data_sets.size-1].inspect
+user_data.meters.each do |hash|
+  data_sets << DataSet.new(hash['name'], hash['server'], user_data.start_date, user_data.end_date, hash['user'], hash['password'], hash['location'])
+  # puts data_sets[data_sets.size-1].inspect
 end
-
 master_set = []
 data_sets.each do |data_set|
-  data_set.download_data_files
-  data_set.delete_irrelevant_data_files
+  unless user_data.quiet
+    # print "Delete irrelevant data files (Y/n)? "
+    # case command
+    # when "Y"
+    #   data_set.delete_irrelevant_data_files
+    # when "n", "N"
+    #   break
+    # else
+    #   print "\nEnter Y or n only. "
+    # end
+  end
   data_set.process_files
-  master_set |= data_set.data_array
+  if master_set.empty?
+    master_set = data_set.data_array.transpose
+    puts "master_set.size: #{master_set.size}"
+  else 
+    master_set = master_set + data_set.data_array.transpose
+  end
 end
-
-out = File.new("sample.txt","w")
-master_set.each do |row|
-  out.puts row.join(" ")
-end
-
-=begin
-#download missing files:
-data95.download_data_files
-data97.download_data_files
-
-data95.delete_data_files
-data97.delete_data_files
-
-arr95=data95.getDataArray.transpose
-arr97=data97.getDataArray.transpose
-
-data_sets.each do |data_set|
-end
-
-data95.filenames.sort.each do |filename|
-  masterDataSet['time'].concat(arr95[filename[0..7]].transpose[0])
-  masterDataSet['grav95'].concat(arr95[filename[0..7]].transpose[1])
-  masterDataSet['grav97'].concat(arr97[filename[0..7]].transpose[1])
-end
-# find mean
-mean95 = masterDataSet['grav95'].mean
-puts mean95
-# subtract mean from each element
-masterDataSet['grav95'].map! {|x| x - mean95}
-
-
-#find mean
-mean97 = masterDataSet['grav97'].mean
-puts mean97
-# subtract mean from each element
-masterDataSet['grav97'].map! {|x| x - mean97}
-#apply static offset so plots don't overlap
-offset = 2000
+puts 86400 * (user_data.start_date-user_data.end_date).abs
+master_set.each_index do |n|
+  next if n % 2 != 1
+# find and subtract mean
+  mean = master_set[n].mean
+  puts mean
+  master_set[n].map! {|x| x-mean}
 #apply offset to each element
-masterDataSet['grav97'].map! {|x| x + offset}
+  offset = 2000*(n-1)/2
+  puts offset
+  master_set[n].map! {|x| x + offset}
+  while master_set[n].size < 86400 * ((user_data.start_date-user_data.end_date).abs+1)
+    master_set[n][master_set[n].size]=nil
+    master_set[n-1][master_set[n-1].size]=nil
+  end
+end
 
 puts "Writing datafile (plot_data.csv)..."
-fout = File.open("plot_data.csv",'w')
-for n in 1..masterDataSet['time'].size do
-  fout.puts "#{masterDataSet['time'][n]} #{masterDataSet['grav95'][n]} #{masterDataSet['grav97'][n]}"
+fout = File.open("#{user_data.plot_path}plot_data.csv",'w')
+master_set.transpose.each do |line|
+  fout.puts line.join " "
 end
 fout.close
+
+using_str = ""
+data_sets.each_index do |n|
+  using_str << "using #{n*2+1}:#{n*2+2} index 0 title '#{data_sets[n].meterName}(#{data_sets[n].location})\' with lines, "
+end
 
 puts "Creating gnuplot script..."
 gnuconf = File.open('gnuplot_script.conf','w')
 gnuconf.print %Q/set terminal png size 1600,900
 set xdata time
-set timefmt "%Y-%m-%d-%H:%M:%S"
-set output "gPhoneComparisonPlot.png"
-set xrange ["#{masterDataSet['time'][0]}":"#{masterDataSet['time'][masterDataSet['time'].size-1]}"]
+set timefmt '%Y-%m-%d-%H:%M:%S'
+set output 'gPhoneComparisonPlot.png'
+set xrange ['#{user_data.start_date}-00:00:00':'#{user_data.end_date}-23:59:59']
 set grid
-set xlabel "Date\\nTime"
-set ylabel "Acceleration"
-set title "gPhone comparison: Toronto, Canada to Boulder, CO"
+set xlabel 'Date\\nTime'
+set ylabel 'Acceleration''
+set title 'Ground Motion recorded between Toronto, Cananda and Boulder, CO'
 set key bmargin center horizontal box
-f(x) = x+500
-plot 'plot_data.csv' using 1:2 index 0 title "gPhone-95(Boulder, CO)" with lines, 'plot_data.csv' using 1:3 index 0 title 'gPhone-97(Toronto, Canada)' with lines
+plot '#{user_data.plot_path}plot_data.csv' #{using_str}
 screendump/
 gnuconf.close
 
 puts "Running script to gnuplot..."
-`gnuplot < gnuplot_script.conf`
+# `gnuplot < gnuplot_script.conf`
 
 puts "Uploading image via ftp..."
-`ftp -s:ftp.txt ftp.microglacoste.com`
-
-=end
+#`ftp -s:ftp.txt ftp.microglacoste.com`
