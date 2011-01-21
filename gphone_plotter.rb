@@ -293,7 +293,6 @@ data_sets.each do |data_set|
     master_set = master_set + data_set.data_array.transpose
   end
 end
-puts 86400 * (user_data.start_date-user_data.end_date).abs
 master_set.each_index do |n|
   next if n % 2 != 1
 # find and subtract mean
