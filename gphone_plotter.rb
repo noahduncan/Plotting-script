@@ -167,14 +167,14 @@ set output '#{CONSTANTS["plot_file_path"]}'
 set xrange ['#{CONSTANTS["start_date"]}-00:00:00':'#{CONSTANTS["end_date"]}-23:59:59']
 set yrange [-1.5:#{data_sets.last.offset/1000+1.5}]
 set grid
-set xlabel 'Date\\nTime'
+set xlabel "Date\\nTime"
 set ylabel 'Acceleration (mGals)'
 set title 'Ground Motion recorded between #{loc_str}'
 set key bmargin center horizontal box\n/
   quake_file.each do |line|
     cols = line.split(",")
     gnuconf.puts %Q/set arrow from '#{cols[0]}', graph 0 to '#{cols[0]}', graph 1 nohead lw 3/
-    gnuconf.puts %Q/set label right '#{cols[1].chomp}\\n#{cols[0]}' at '#{cols[0]}', graph 0.98/
+    gnuconf.puts %Q/set label right "#{cols[1].chomp}\\n#{cols[0]}" at '#{cols[0]}', graph 0.98/
   end
   gnuconf.print %Q/set datafile separator ','
 plot #{using_str}
