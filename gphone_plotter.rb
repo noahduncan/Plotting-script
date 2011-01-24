@@ -172,7 +172,7 @@ set output '#{CONSTANTS["plot_file_path"]}'
 set xrange ['#{CONSTANTS["start_date"]}-00:00:00':'#{CONSTANTS["end_date"]}-23:59:59']
 set grid
 set xlabel 'Date\\nTime'
-set ylabel 'Acceleration'
+set ylabel 'Acceleration ({\/Symbol m}gal)'
 set title 'Ground Motion recorded between #{loc_str}'
 set key bmargin center horizontal box
 set datafile separator ","
@@ -184,4 +184,4 @@ puts "Running script to gnuplot..."
 `gnuplot < gnuplot_script.conf`
 
 puts "Uploading image via ftp..."
-`ftp -s:ftp.txt ftp.microglacoste.com`
+# `ftp -s:ftp.txt ftp.microglacoste.com`
