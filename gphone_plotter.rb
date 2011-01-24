@@ -48,11 +48,11 @@ class TsfFile
   end
 end
 
-# DataSet contains all files information about the meter whose files it will contain
-# Also, the data_array variable will contain the combined output of all of the TsfFiles
-# that the DataSet contains.
-# Also the Dataset contains functions to make the calls to download necessary data files, 
-# delete unused files, and process, or parse through, the files.
+# DataSet contains all pieces of information about the meter whose files it will contain
+# Also, the data_array instance variable will contain the combined output of all of the TsfFiles
+# that the DataSet contains (after process_files is called).
+# The Dataset contains methods to download necessary data files, delete unused files, 
+# and process (i.e. parse through) the files.
 class DataSet
   attr_accessor :meterName, :server, :files, :location, :offset
   attr_reader :data_array, :mean
@@ -66,10 +66,10 @@ class DataSet
     @data_array = []
     @offset = @@data_set_count * CONSTANTS["offset"]
     
-    # create the array of files that composes the DataSet.  Name is determined by a convention.  Want
-    # the last 7 full days of data.
-    (0..CONSTANTS["num_files"]-1).to_a.reverse.each do |i|
-      filename = "#{(CONSTANTS["end_date"]-i).year}_#{"%03d" % (CONSTANTS["end_date"]-i).yday.to_i}_#{@meterName}.tsf"
+    # create the array of files that composes the DataSet.  Fileame is determined by a convention.  Number of days
+    # to download is determined by CONSTANTS["num_files"]
+    (0..CONSTANTS["num_files"]-1).each do |i|
+      filename = "#{(CONSTANTS["start_date"]+i).year}_#{"%03d" % (CONSTANTS["start_date"]+i).yday.to_i}_#{@meterName}.tsf"
       if File.file?(filename)
         puts "#{filename} exists: skipping download."
       else
@@ -86,7 +86,7 @@ class DataSet
     `wget --user=#{CONSTANTS["gphone_user"]} --password=#{CONSTANTS["gphone_pass"]} \"#{@server}/gmonitor_data/#{filename}\"`
   end
   
-  # if there is a TSF file in the FS Tree that is not in the files array remove it
+  # if there is a TSF file in the os Tree that is not in the files array remove it
   # as it is not needed anymore
   def delete_irrelevant_data_files
     shell_file_names = Dir.glob("*#{meterName}.tsf")
@@ -119,10 +119,10 @@ class DataSet
   def fix_gaps(length_diff)
     puts "  DataSet is too short: adding #{length_diff} empty lines"
     nil_array = []
-    (0..length_diff).each do
-      nil_array << nil
+    (0..length_diff-1).each do
+      nil_array << [nil,nil]
     end
-    @data_array << nil_array
+    @data_array += nil_array
   end
   
   def normalize
@@ -136,9 +136,16 @@ class DataSet
   def add_offset
     @data_array.map! {|x| [x[0], x[1] += @offset]}
   end
+  
+  def convert_to_mGals
+    @data_array.map! {|x| [x[0], x[1] / 1000]}
+  end
 end
 
 def create_gnuplot_script(data_sets)
+  gnuconf = File.open("gnuplot_script.conf",'w')
+  quake_file = File.open("earthquakes.csv")
+  
   using_str = ""
   loc_str = ""
   data_sets.each_index do |n|
@@ -151,30 +158,36 @@ def create_gnuplot_script(data_sets)
     end
   end
   
-  gnuconf = File.open("gnuplot_script.conf",'w')
   gnuconf.print %Q/set terminal png size 1600,900
-  set xdata time
-  set timefmt '%Y-%m-%d-%H:%M:%S'
-  set output '#{CONSTANTS["plot_file_path"]}'
-  set xrange ['#{CONSTANTS["start_date"]}-00:00:00':'#{CONSTANTS["end_date"]}-23:59:59']
-  set grid
-  set xlabel 'Date\\nTime'
-  set ylabel 'Acceleration'
-  set title 'Ground Motion recorded between #{loc_str}'
-  set key bmargin center horizontal box
-  set datafile separator ","
-  plot #{using_str}
-  screendump/
+set xdata time
+set timefmt '%Y-%m-%d-%H:%M:%S'
+set output '#{CONSTANTS["plot_file_path"]}'
+set xrange ['#{CONSTANTS["start_date"]}-00:00:00':'#{CONSTANTS["end_date"]}-23:59:59']
+set yrange [-1.5:#{data_sets.last.offset/1000+1.5}]
+set grid
+set xlabel 'Date\\nTime'
+set ylabel 'Acceleration (mGals)'
+set title 'Ground Motion recorded between #{loc_str}'
+set key bmargin center horizontal box\n/
+  quake_file.each do |line|
+    cols = line.split(",")
+    gnuconf.puts %Q/set arrow from '#{cols[0]}', graph 0 to '#{cols[0]}', graph 1 nohead lw 3/
+    gnuconf.puts %Q/set label ' #{cols[1].chomp}' at '#{cols[0]}', graph 0.98/
+  end
+  gnuconf.print %Q/set datafile separator ','
+plot #{using_str}
+screendump/
+
   gnuconf.close
 end
 
-###########  Begin CONSTANTS Creation ################
+###########  Begin CONSTANTS ################
 CONSTANTS = {
   "now" => Time.new                                 # seed to find yesterday's date in gmt
 }
 CONSTANTS.merge!({
   "end_date" => Date.parse(CONSTANTS["now"].getgm.to_s)-1,  # Yesterday
-  "num_files" => 1                                          # Number of previous files to load / process in each DataSet
+  "num_files" => 7                                          # Number of previous files to load / process in each DataSet
 })
 CONSTANTS.merge!({
   "start_date" => CONSTANTS["end_date"] - (CONSTANTS["num_files"]-1), #1 for index offset
@@ -189,14 +202,14 @@ CONSTANTS.merge!({
   "plot_file_path" => "gPhoneComparisonPlot.png",   # Path/filename of where you want the plot saved (file will be overwritten)
   "data_file_path" => "plot_data.dat"               # Path/filename of output file to be run into gnuplot via configuration script (file will be overwritten)
 })
-########## End CONSTANTS Creation ######################
+########## End CONSTANTS ######################
 
 ######## Edit meter info in this section ###############
 ####### Format: [meter_name, server_ip, location] ######
 meters = [
+  ["gPhone 095","10.0.1.119","Boulder, CO"],
   ["gPhone 097","216.254.148.51","Toronto, Canada"]
 ]
-  # ["gPhone 095","10.0.1.119","Boulder, CO"],
 ##########  End Editable Section #######################
 
 data_sets = []
@@ -204,13 +217,14 @@ master_set = []
 
 meters.each do |meter|
   data_sets << DataSet.new(meter[0],meter[1],meter[2])
-  data_sets << DataSet.new(meter[0],meter[1],meter[2])
 end
 
 data_sets.each do |data_set|
+  data_set.delete_irrelevant_data_files
   data_set.process_files
   data_set.normalize
   data_set.add_offset
+  data_set.convert_to_mGals
   data_set.fix_gaps(data_set.num_gaps) if data_set.num_gaps > 0
   master_set += data_set.data_array.transpose
 end
