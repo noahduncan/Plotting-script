@@ -63,6 +63,7 @@ class DataSet
     @server = server
     @location = location
     @files = []
+    @filenames = []
     @data_array = []
     @offset = @@data_set_count * CONSTANTS["offset"]
     
@@ -76,6 +77,7 @@ class DataSet
         download_data_file(filename)
       end
       @files << TsfFile.new(filename)
+      @filenames << filename
     end
   end
   
@@ -90,10 +92,10 @@ class DataSet
   # as it is not needed anymore
   def delete_irrelevant_data_files
     shell_file_names = Dir.glob("*#{meterName}.tsf")
-    @files.each do |file|
-      unless shell_file_names.include? file.name
-        puts "Deleting: #{file.name}"
-        File.delete(file.name)
+    shell_file_names.each do |shell_file_name|
+      unless @filenames.include? shell_file_name
+        puts "Deleting: #{shell_file_name}"
+        File.delete(shell_file_name)
       end
     end
   end
@@ -111,7 +113,7 @@ class DataSet
     end
     find_mean
   end
-   
+  
   def num_gaps
     CONSTANTS["lines_in_file"] * CONSTANTS["num_files"] - @data_array.size
   end
@@ -172,7 +174,7 @@ set key bmargin center horizontal box\n/
   quake_file.each do |line|
     cols = line.split(",")
     gnuconf.puts %Q/set arrow from '#{cols[0]}', graph 0 to '#{cols[0]}', graph 1 nohead lw 3/
-    gnuconf.puts %Q/set label ' #{cols[1].chomp}' at '#{cols[0]}', graph 0.98/
+    gnuconf.puts %Q/set label right '#{cols[1].chomp}\\n#{cols[0]}' at '#{cols[0]}', graph 0.98/
   end
   gnuconf.print %Q/set datafile separator ','
 plot #{using_str}
