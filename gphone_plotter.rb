@@ -71,13 +71,13 @@ class DataSet
     # to download is determined by CONSTANTS["num_files"]
     (0..CONSTANTS["num_files"]-1).each do |i|
       filename = "#{(CONSTANTS["start_date"]+i).year}_#{"%03d" % (CONSTANTS["start_date"]+i).yday.to_i}_#{@meterName}.tsf"
-      if File.file?(filename)
-        puts "#{filename} exists: skipping download."
-      else
+      # if File.file?(CONSTANTS["tsf_file_path"] + filename)
+      #   puts "#{filename} exists: skipping download."
+      # else
         download_data_file(filename)
-      end
-      @files << TsfFile.new(filename)
-      @filenames << filename
+      # end
+      @files << TsfFile.new(CONSTANTS["tsf_file_path"] + filename)
+      @filenames << CONSTANTS["tsf_file_path"] + filename
     end
   end
   
@@ -85,13 +85,13 @@ class DataSet
   def download_data_file(filename)
     #download the .tsf file from the gphone computers using wget
     puts "Downloading: \"#{@server}/gmonitor_data/#{filename}\""
-    `wget --user=#{CONSTANTS["gphone_user"]} --password=#{CONSTANTS["gphone_pass"]} \"#{@server}/gmonitor_data/#{filename}\"`
+    `wget -c --directory-prefix=#{CONSTANTS["tsf_file_path"]} --user=#{CONSTANTS["gphone_user"]} --password=#{CONSTANTS["gphone_pass"]} \"#{@server}/gmonitor_data/#{filename}\"`
   end
   
   # if there is a TSF file in the os Tree that is not in the files array remove it
   # as it is not needed anymore
   def delete_irrelevant_data_files
-    shell_file_names = Dir.glob("*#{meterName}.tsf")
+    shell_file_names = Dir.glob("#{CONSTANTS["tsf_file_path"]}*#{meterName}.tsf")
     shell_file_names.each do |shell_file_name|
       unless @filenames.include? shell_file_name
         puts "Deleting: #{shell_file_name}"
@@ -145,8 +145,8 @@ class DataSet
 end
 
 def create_gnuplot_script(data_sets)
-  gnuconf = File.open("gnuplot_script.conf",'w')
-  quake_file = File.open("earthquakes.csv")
+  gnuconf = File.open("outputs/gnuplot_script.conf",'w')
+  quake_file = File.open("inputs/earthquakes.csv")
   
   using_str = ""
   loc_str = ""
@@ -192,17 +192,18 @@ CONSTANTS.merge!({
   "num_files" => 7                                          # Number of previous files to load / process in each DataSet
 })
 CONSTANTS.merge!({
-  "start_date" => CONSTANTS["end_date"] - (CONSTANTS["num_files"]-1), #1 for index offset
-  "lines_in_file" => 86400,                         # set-in-stone: number of secs in a day
-  "offset" => 2000,                                 # Change this to change the separation distance of the meter plots
-  "gphone_user" => "mgl_admin",                     # Global username for gPhone http file access
-  "gphone_pass" => "gravity",                       # Global password for gPhone https file access
-  "www_server" => "xxx.xxx.xxx.xxx",                 # WWW Ftp Sever address if you are uploading to a website 
-  "www_ftp_user" => "secret",                       # Ftp username
-  "www_ftp_pass" => "secret",                       # Ftp Password
-  "www_ftp_path" => "www_root",                     # Path to navigate to on ftp server
-  "plot_file_path" => "gPhoneComparisonPlot.png",   # Path/filename of where you want the plot saved (file will be overwritten)
-  "data_file_path" => "plot_data.dat"               # Path/filename of output file to be run into gnuplot via configuration script (file will be overwritten)
+  "start_date" => CONSTANTS["end_date"] - (CONSTANTS["num_files"]-1),  # 1 for index offset
+  "lines_in_file" => 86400,                                            # set-in-stone: number of secs in a day
+  "offset" => 2000,                                                    # Change this to change the separation distance of the meter plots
+  "gphone_user" => "mgl_admin",                                        # Global username for gPhone http file access
+  "gphone_pass" => "gravity",                                          # Global password for gPhone https file access
+  "www_server" => "xxx.xxx.xxx.xxx",                                   # WWW Ftp Sever address if you are uploading to a website 
+  "www_ftp_user" => "secret",                                          # Ftp username
+  "www_ftp_pass" => "secret",                                          # Ftp Password
+  "www_ftp_path" => "www_root",                                        # Path to navigate to on ftp server
+  "tsf_file_path" =>  "tsf_files/",                                     # Folder in which to download / store tsf files
+  "plot_file_path" => "outputs/gPhoneComparisonPlot.png",              # Path/filename of where you want the plot saved (file will be overwritten)
+  "data_file_path" => "outputs/plot_data.dat"                          # Path/filename of output file to be run into gnuplot via configuration script (file will be overwritten)
 })
 ########## End CONSTANTS ######################
 
