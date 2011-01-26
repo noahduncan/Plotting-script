@@ -1,0 +1,6 @@
+FOLDER INFO
+
+This folder contains inputs for the gphone_plotter.rb script.
+
+Accepted Inputs:
+  --Earthquake file (csv->[DateTime, Description) 
