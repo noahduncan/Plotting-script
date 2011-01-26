@@ -1,7 +1,0 @@
-microgla
-microg422
-cd public_html
-binary
-put gPhoneComparisonPlot.png
-bye
-
