@@ -312,7 +312,7 @@ puts "gnuplot #{CONSTANTS['gnuplot_script_path']}"
 `gnuplot #{CONSTANTS['gnuplot_script_path']}`
 
 puts "Creating ftp script..."
-ftp_script = FtpScript.new(CONSTANTS['ftp_script_path'], CONSTANTS['www_ftp_user'], CONSTANTS['www_ftp_user'], [CONSTANTS['plot_file_path']])
+ftp_script = FtpScript.new(CONSTANTS['ftp_script_path'], CONSTANTS['www_ftp_user'], CONSTANTS['www_ftp_pass'], [CONSTANTS['plot_file_path']])
 ftp_script.create
 
 puts "Uploading image via ftp..."
