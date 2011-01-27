@@ -1,14 +1,54 @@
 require 'time'
 require 'date'
 
+# Begin CONSTANTS 
+CONSTANTS = {
+  "now" => Time.new                                                   # DO NOT CHANGE: seed to find yesterday's date in gmt
+}                                                                     
+CONSTANTS.merge!({                                                    
+  "end_date" => Date.parse(CONSTANTS["now"].getgm.to_s)-1,            # DO NOT CHANGE: Yesterday's date
+########======================== Edit this section =================###############
+  "num_files" => 7                                                    # Number of previous files (days) to load / process in each DataSet
+})
+CONSTANTS.merge!({
+  "start_date" => CONSTANTS["end_date"] - (CONSTANTS["num_files"]-1), # DO NOT CHANGE: -1 for indexing offset
+  "lines_in_file" => 86400,                                           # DO NOT CHANGE: number of secs in a day
+  "offset" => 2000,                                                   # Change this to change the separation distance of the meter plots
+  "gphone_user" => "mgl_admin",                                       # Global username for gPhone http file access
+  "gphone_pass" => "gravity",                                         # Global password for gPhone https file access
+  "www_ftp_server" => "ftp.microglacoste.com",                        # WWW Ftp Sever address if you are uploading to a website 
+  "www_ftp_user" => "microgla",                                       # Ftp username
+  "www_ftp_pass" => "microg422",                                      # Ftp Password
+  "www_ftp_path" => "public_html",                                    # Path to navigate to on ftp server
+  "tsf_file_path" => "tsf_files/",                                    # Path to where tsf_files should be stored
+  "ftp_script_path" => "outputs/ftp.txt",                             # Path to where ftp script will be saved
+  "plot_file_path" => "outputs/gPhoneComparisonPlot.png",             # Path/filename of where you want the plot saved (file will be overwritten)
+  "data_file_path" => "outputs/plot_data.csv",                        # Path/filename of configuration file to be run into gnuplot (file will be overwritten)
+  "gnuplot_script_path" => "outputs/gnuplot_script.conf",             # Path/filename of the script to run to gnuplot
+  "earthquake_file_path" => "inputs/earthquakes.csv"                  # Path/filename of the file containing earthquake events that should be plotted
+})
+# End CONSTANTS
+
+# Each meter in this section will have it's data downloaded and plotted
+# Format: [meter_name, server_ip, location]
+# NOTE: meter_name MUST be _identical_ to the name that appears in the files on the file system
+# (i.e. if you enter gPhone 95 when the file is gPhone 095 this script will error and exit)
+meters = [
+  ["gPhone 095","10.0.1.119","Boulder, CO"],
+  ["gPhone 097","216.254.148.51","Toronto, Canada"]
+]
+##########=================  End Editable Section =================#######################
+
 # Add function "mean" to all Arrays
 class Array
+  # return floating point cumulative sum of all elements
   def sum
-    inject(0.0) { |result, el| result + el } #return floating point cumulative sum of all elements
+    inject(0.0) { |result, el| result + el } 
   end
   
+  # return mean of the array.
   def mean
-    sum / size #return mean of the array.
+    sum / size
   end
 end
 
@@ -24,6 +64,8 @@ class TsfFile
     @name = name
   end
   
+  #loop through file and extract time and gravity
+  #return array with columns time and gravity
   def get_time_and_corrected_gravity_data
     output = []
     @f.rewind
@@ -144,20 +186,25 @@ class DataSet
   end
 end
 
+# this object creates a new file that contains the script info for the plotting program.
+# earthquakes are plotted with a vertical line (arrow) and the coordinates are found in 
+# the @quake_file.  Data_sets are necessary to find where the meters are located and what
+# their names are.
 class GnuplotScript
   def initialize(file_path,data_sets)
     @file = file_path
     @quake_file = File.new(CONSTANTS["earthquake_file_path"],'r')
-    @y_max = data_sets.last.offset / 1000 + 1.5
+    @y_max = data_sets.last.offset / 1000 + 1.5   # divide by 1000 to convert offset to mGal (should clean this up) and
     
-    @meter_names = []
-    @locations = []
+    @meter_names = []  # will contain each meter name from each data_set
+    @locations = []    # the locations from each data set
     data_sets.each do |data_set|
       @meter_names << data_set.meterName
       @locations << data_set.location
     end
   end
 
+  # used by create method
   def quake_str
     quakes = ""
     @quake_file.each do |line|
@@ -170,6 +217,7 @@ class GnuplotScript
     quakes
   end
   
+  # used by create method
   def loc_str
     locs = nil
     @locations.each do |location|
@@ -178,6 +226,7 @@ class GnuplotScript
     locs
   end
   
+  # used by create method
   def using_str
     using = nil
     @meter_names.each_index do |n|
@@ -190,6 +239,7 @@ class GnuplotScript
     using
   end
 
+  # write all info to file
   def create
     f = File.new(@file, 'w')
     f.print %Q/set terminal png size 1600,900
@@ -220,16 +270,24 @@ plot #{using_str}
 screendump/
     f.close
   end
+
+  # run file to gnuplot
+  # NOTE: gnuplot must be in path
+  def execute
+    `gnuplot #{CONSTANTS['gnuplot_script_path']}`
+  end
 end
 
+# Object that can generate and run an ftp script for uploading
 class FtpScript
   def initialize(filename, user, pass, uploads)
-    @filename = filename
-    @user = user
-    @pass = pass
-    @uploads = uploads
+    @filename = filename   # file path/name on filesystem
+    @user = user           # ftp username
+    @pass = pass           # ftp password
+    @uploads = uploads     # Array of files to send
   end
   
+  # Create file
   def create
     f = File.new(@filename,'w')
     
@@ -243,44 +301,16 @@ class FtpScript
     f.puts "bye"
     f.close
   end
+  
+  # Run script to ftp program.
+  # NOTE: ftp must be in path
+  def execute
+    `ftp -s:#{filename} #{CONSTANTS['www_ftp_server']}`
+  end
 end
-###########  Begin CONSTANTS ################
-CONSTANTS = {
-  "now" => Time.new                                         # seed to find yesterday's date in gmt
-}
-CONSTANTS.merge!({
-  "end_date" => Date.parse(CONSTANTS["now"].getgm.to_s)-1,  # Yesterday
-  "num_files" => 7                                          # Number of previous files to load / process in each DataSet
-})
-CONSTANTS.merge!({
-  "start_date" => CONSTANTS["end_date"] - (CONSTANTS["num_files"]-1), #1 for index offset
-  "lines_in_file" => 86400,                                 # set-in-stone: number of secs in a day
-  "offset" => 2000,                                         # Change this to change the separation distance of the meter plots
-  "gphone_user" => "mgl_admin",                             # Global username for gPhone http file access
-  "gphone_pass" => "gravity",                               # Global password for gPhone https file access
-  "www_ftp_server" => "ftp.microglacoste.com",              # WWW Ftp Sever address if you are uploading to a website 
-  "www_ftp_user" => "microgla",                             # Ftp username
-  "www_ftp_pass" => "microg422",                            # Ftp Password
-  "www_ftp_path" => "public_html",                          # Path to navigate to on ftp server
-  "tsf_file_path" => "tsf_files/",                           # Path to where tsf_files should be stored
-  "ftp_script_path" => "outputs/ftp.txt",                    # Path to where ftp script will be saved
-  "plot_file_path" => "outputs/gPhoneComparisonPlot.png",   # Path/filename of where you want the plot saved (file will be overwritten)
-  "data_file_path" => "outputs/plot_data.dat",              # Path/filename of configuration file to be run into gnuplot (file will be overwritten)
-  "gnuplot_script_path" => "outputs/gnuplot_script.conf",    # Path/filename of the script to run to gnuplot
-  "earthquake_file_path" => "inputs/earthquakes.csv"        # Path/filename of the file containing earthquake events that should be plotted
-})
-########## End CONSTANTS ######################
 
-######## Edit meter info in this section ###############
-####### Format: [meter_name, server_ip, location] ######
-meters = [
-  ["gPhone 095","10.0.1.119","Boulder, CO"],
-  ["gPhone 097","216.254.148.51","Toronto, Canada"]
-]
-##########  End Editable Section #######################
-
-data_sets = []
-master_set = []
+data_sets = []             # Array containing the DataSet objects for each meter entry
+master_set = []            # Array that will contain the compilation of all DataSets' data_arrays
 
 meters.each do |meter|
   data_sets << DataSet.new(meter[0],meter[1],meter[2])
@@ -306,14 +336,12 @@ fout.close
 puts "Creating gnuplot script..."
 gnuplot_script = GnuplotScript.new(CONSTANTS['gnuplot_script_path'], data_sets)
 gnuplot_script.create
-
 puts "Running script to gnuplot..."
-puts "gnuplot #{CONSTANTS['gnuplot_script_path']}"
-`gnuplot #{CONSTANTS['gnuplot_script_path']}`
+gnuplot_script.execute
 
 puts "Creating ftp script..."
 ftp_script = FtpScript.new(CONSTANTS['ftp_script_path'], CONSTANTS['www_ftp_user'], CONSTANTS['www_ftp_pass'], [CONSTANTS['plot_file_path']])
 ftp_script.create
 
 puts "Uploading image via ftp..."
-`ftp -s:#{CONSTANTS["ftp_script_path"]} #{CONSTANTS['www_ftp_server']}`
+ftp_script.execute
