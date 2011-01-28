@@ -222,7 +222,10 @@ class GnuplotScript
   def loc_str
     locs = nil
     @locations.each do |location|
-      locs.nil? ? locs = location : locs << " and #{location}"
+      locs.nil? ? locs = location : locs += " and #{location}"
+      puts "location: #{location}"
+      puts @locations.inspect
+      puts "locs=#{locs}\n\n"
     end
     locs
   end
@@ -316,7 +319,7 @@ master_set = []            # Array that will contain the compilation of all Data
 meters.each do |meter|
   data_sets << DataSet.new(meter[0],meter[1],meter[2])
 end
-
+=begin
 data_sets.each do |data_set|
   data_set.delete_irrelevant_data_files
   data_set.process_files
@@ -333,7 +336,7 @@ master_set.transpose.each do |line|
   fout.puts line.join ","
 end
 fout.close
-
+=end
 puts "Creating gnuplot script..."
 gnuplot_script = GnuplotScript.new(CONSTANTS['gnuplot_script_path'], data_sets)
 gnuplot_script.create
@@ -346,4 +349,4 @@ ftp_script = FtpScript.new(CONSTANTS['ftp_script_path'], CONSTANTS['www_ftp_user
 ftp_script.create
 
 puts "Uploading image via ftp..."
-ftp_script.execute
+# ftp_script.execute
