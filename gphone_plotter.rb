@@ -223,9 +223,6 @@ class GnuplotScript
     locs = nil
     @locations.each do |location|
       locs.nil? ? locs = location : locs += " and #{location}"
-      puts "location: #{location}"
-      puts @locations.inspect
-      puts "locs=#{locs}\n\n"
     end
     locs
   end
