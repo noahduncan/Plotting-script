@@ -346,4 +346,4 @@ ftp_script = FtpScript.new(CONSTANTS['ftp_script_path'], CONSTANTS['www_ftp_user
 ftp_script.create
 
 puts "Uploading image via ftp..."
-# ftp_script.execute
+ftp_script.execute
