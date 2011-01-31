@@ -1,7 +1,7 @@
 require "date"
 require "time"
 
-# Begin CONSTANTS 
+# These include usernames, passwords, and file locations for the entire gphone_plotter script
 CONSTANTS = {
   "now" => Time.new                                                   # DO NOT CHANGE: seed to find yesterday's date in gmt
 }                                                                     
@@ -27,14 +27,13 @@ CONSTANTS.merge!({
   "gnuplot_script_path" => "outputs/gnuplot_script.conf",             # Path/filename of the script to run to gnuplot
   "earthquake_file_path" => "inputs/earthquakes.csv"                  # Path/filename of the file containing earthquake events that should be plotted
 })
-# End CONSTANTS
 
 # Each meter in this section will have it's data downloaded and plotted
 # Format: [meter_name, server_ip, location]
 # NOTE: meter_name MUST be _identical_ to the name that appears in the files on the file system
-# (i.e. if you enter gPhone 95 when the file is gPhone 095 this script will error and exit)
+# (i.e. if you enter ...gPhone 95... when the file is ...gPhone 095.. this script will error and exit)
 METERS = [
   ["gPhone 095","10.0.1.119","Boulder, CO"],
   ["gPhone 097","216.254.148.51","Toronto, Canada"]
 ]
-##########=================  End Editable Section =================#######################
+###############=================  End Editable Section =================##################
