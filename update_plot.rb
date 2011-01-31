@@ -13,7 +13,6 @@ md5_f = File.new(hash_file_path,"a+")
 md5_f.rewind
 md5_s = md5_f.gets.chomp unless md5_f.eof?
 
-puts "#{md5_s} == #{md5_new}"
 if md5_s == md5_new
   puts "No changes detected in '#{CONSTANTS['earthquake_file_path']}'"
 else
