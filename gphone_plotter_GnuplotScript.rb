@@ -11,7 +11,7 @@ class GnuplotScript
     @meter_names = []  # will contain each meter name from each data_set
     @locations = []    # the locations from each data set
     meters.each do |meter|
-      @meter_names << meter[1]
+      @meter_names << meter[0]
       @locations << meter[2]
     end
   end
