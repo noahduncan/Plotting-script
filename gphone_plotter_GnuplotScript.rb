@@ -5,8 +5,8 @@
 class GnuplotScript
   def initialize(file_path,meters)
     @file = file_path
-    @quake_file = File.new(CONSTANTS["earthquake_file_path"],'r')
-    @y_max = (meters.length-1) * CONSTANTS["offset"] / 1000 + 1.5   # divide by 1000 to convert offset to mGal (should clean this up) and
+    @quake_file = File.new(CONSTANTS[:earthquake_file_path],'r')
+    @y_max = (meters.length-1) * CONSTANTS[:offset] / 1000 + 1.5   # divide by 1000 to convert offset to mGal (should clean this up) and
     
     @meter_names = []  # will contain each meter name from each data_set
     @locations = []    # the locations from each data set
@@ -22,7 +22,7 @@ class GnuplotScript
     @quake_file.each do |line|
       cols = line.split(",")
       next if cols[0].length != "yyyy-mm-dd-hh:mm:ss".length
-      if Date.parse(cols[0]) <= CONSTANTS['end_date'] && Date.parse(cols[0]) >= CONSTANTS['start_date']
+      if Date.parse(cols[0]) <= CONSTANTS[:end_date] && Date.parse(cols[0]) >= CONSTANTS[:start_date]
         quakes << %Q/set arrow from '#{cols[0]}', graph 0 to '#{cols[0]}', graph 1 nohead lw 3\n/
         quakes << %Q/set label right "#{cols[1].chomp}\\n#{cols[0]}" at '#{cols[0]}', graph 0.98\n/
       end
@@ -44,9 +44,9 @@ class GnuplotScript
     using = nil
     @meter_names.each_index do |n|
       if using.nil?
-        using = "'#{CONSTANTS["data_file_path"]}' using #{n*2+1}:#{n*2+2} index 0 title '#{@meter_names[n]}(#{@locations[n]})\' with lines"
+        using = "'#{CONSTANTS[:data_file_path]}' using #{n*2+1}:#{n*2+2} index 0 title '#{@meter_names[n]}(#{@locations[n]})\' with lines"
       else    
-        using << ", '#{CONSTANTS["data_file_path"]}' using #{n*2+1}:#{n*2+2} index 0 title '#{@meter_names[n]}(#{@locations[n]})\' with lines"
+        using << ", '#{CONSTANTS[:data_file_path]}' using #{n*2+1}:#{n*2+2} index 0 title '#{@meter_names[n]}(#{@locations[n]})\' with lines"
       end
     end
     using
@@ -56,13 +56,13 @@ class GnuplotScript
   def create
     f = File.new(@file, 'w')
     f.print %Q/set terminal png size 1600,900
-set output '#{CONSTANTS["plot_file_path"]}'
+set output '#{CONSTANTS[:plot_file_path]}'
 
 # Graph settings
 set xdata time
 set timefmt '%Y-%m-%d-%H:%M:%S'
-set output '#{CONSTANTS["plot_file_path"]}'
-set xrange ['#{CONSTANTS["start_date"]}-00:00:00':'#{CONSTANTS["end_date"]}-23:59:59']
+set output '#{CONSTANTS[:plot_file_path]}'
+set xrange ['#{CONSTANTS[:start_date]}-00:00:00':'#{CONSTANTS[:end_date]}-23:59:59']
 set yrange [-1.5:#{@y_max}]
 set grid
 
@@ -87,6 +87,6 @@ screendump/
   # run file to gnuplot
   # NOTE: gnuplot must be in path
   def execute
-    `gnuplot #{CONSTANTS['gnuplot_script_path']}`
+    `gnuplot #{CONSTANTS[:gnuplot_script_path]}`
   end
 end

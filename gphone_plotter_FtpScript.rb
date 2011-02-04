@@ -13,7 +13,7 @@ class FtpScript
     
     f.puts @user
     f.puts @pass
-    f.puts "cd public_html"
+    f.puts "cd #{:www_ftp_path}"
     f.puts "binary"
     @uploads.each do |upload|
       f.puts "put #{upload}"
@@ -25,6 +25,6 @@ class FtpScript
   # Run script to ftp program.
   # NOTE: ftp must be in path
   def execute
-    `ftp -s:#{@filename} #{CONSTANTS['www_ftp_server']}`
+    `ftp -s:#{@filename} #{CONSTANTS[:www_ftp_server]}`
   end
 end

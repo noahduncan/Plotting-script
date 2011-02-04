@@ -72,19 +72,19 @@ class DataSet
     @files = []
     @filenames = []
     @data_array = []
-    @offset = @@data_set_count * CONSTANTS["offset"]
+    @offset = @@data_set_count * CONSTANTS[:offset]
     
     # create the array of files that composes the DataSet.  Fileame is determined by a convention.  Number of days
-    # to download is determined by CONSTANTS["num_files"]
-    (0..CONSTANTS["num_files"]-1).each do |i|
-      filename = "#{(CONSTANTS["start_date"]+i).year}_#{"%03d" % (CONSTANTS["start_date"]+i).yday.to_i}_#{@meterName}.tsf"
-      # if File.file?(CONSTANTS["tsf_file_path"] + filename)
+    # to download is determined by CONSTANTS[:num_files]
+    (0...CONSTANTS[:num_files]).each do |i|
+      filename = "#{(CONSTANTS[:start_date]+i).year}_#{"%03d" % (CONSTANTS[:start_date]+i).yday.to_i}_#{@meterName}.tsf"
+      # if File.file?(CONSTANTS[:tsf_file_path] + filename)
       #   puts "#{filename} exists: skipping download."
       # else
         download_data_file(filename)
       # end
-      @files << TsfFile.new(CONSTANTS["tsf_file_path"] + filename)
-      @filenames << CONSTANTS["tsf_file_path"] + filename
+      @files << TsfFile.new(CONSTANTS[:tsf_file_path] + filename)
+      @filenames << CONSTANTS[:tsf_file_path] + filename
     end
   end
   
@@ -92,13 +92,13 @@ class DataSet
   def download_data_file(filename)
     #download the .tsf file from the gphone computers using wget
     puts "Downloading: \"#{@server}/gmonitor_data/#{filename}\""
-    `wget -c --directory-prefix=#{CONSTANTS["tsf_file_path"]} --user=#{CONSTANTS["gphone_user"]} --password=#{CONSTANTS["gphone_pass"]} \"#{@server}/gmonitor_data/#{filename}\"`
+    `wget -c --directory-prefix=#{CONSTANTS[:tsf_file_path]} --user=#{CONSTANTS[:gphone_user]} --password=#{CONSTANTS[:gphone_pass]} \"#{@server}/gmonitor_data/#{filename}\"`
   end
   
   # if there is a TSF file in the os Tree that is not in the files array remove it
   # as it is not needed anymore
   def delete_irrelevant_data_files
-    shell_file_names = Dir.glob("#{CONSTANTS["tsf_file_path"]}*#{meterName}.tsf")
+    shell_file_names = Dir.glob("#{CONSTANTS[:tsf_file_path]}*#{meterName}.tsf")
     shell_file_names.each do |shell_file_name|
       unless @filenames.include? shell_file_name
         puts "Deleting: #{shell_file_name}"
@@ -122,13 +122,13 @@ class DataSet
   end
   
   def num_gaps
-    CONSTANTS["lines_in_file"] * CONSTANTS["num_files"] - @data_array.size
+    CONSTANTS[:lines_in_file] * CONSTANTS[:num_files] - @data_array.size
   end
   
   def fix_gaps(length_diff)
     puts "  DataSet is too short: adding #{length_diff} empty lines"
     nil_array = []
-    (0..length_diff-1).each do
+    (0...length_diff).each do
       nil_array << [nil,nil]
     end
     @data_array += nil_array
@@ -170,22 +170,22 @@ data_sets.each do |data_set|
   master_set += data_set.data_array.transpose
 end
 
-puts "Writing datafile (#{CONSTANTS["data_file_path"]})..."
-fout = File.new("#{CONSTANTS["data_file_path"]}",'w')
+puts "Writing datafile (#{CONSTANTS[:data_file_path]})..."
+fout = File.new("#{CONSTANTS[:data_file_path]}",'w')
 master_set.transpose.each do |line|
   fout.puts line.join ","
 end
 fout.close
 
 puts "Creating gnuplot script..."
-gnuplot_script = GnuplotScript.new(CONSTANTS['gnuplot_script_path'], METERS)
+gnuplot_script = GnuplotScript.new(CONSTANTS[:gnuplot_script_path], METERS)
 gnuplot_script.create
 
 puts "Running script to gnuplot..."
 gnuplot_script.execute
 
 puts "Creating ftp script..."
-ftp_script = FtpScript.new(CONSTANTS['ftp_script_path'], CONSTANTS['www_ftp_user'], CONSTANTS['www_ftp_pass'], [CONSTANTS['plot_file_path']])
+ftp_script = FtpScript.new(CONSTANTS[:ftp_script_path], CONSTANTS[:www_ftp_user], CONSTANTS[:www_ftp_pass], [CONSTANTS[:plot_file_path]])
 ftp_script.create
 
 puts "Uploading image via ftp..."
