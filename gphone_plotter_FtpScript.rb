@@ -13,7 +13,7 @@ class FtpScript
     
     f.puts @user
     f.puts @pass
-    f.puts "cd #{:www_ftp_path}"
+    f.puts "cd #{CONSTANTS[:www_ftp_path]}"
     f.puts "binary"
     @uploads.each do |upload|
       f.puts "put #{upload}"
