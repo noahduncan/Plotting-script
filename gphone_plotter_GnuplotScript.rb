@@ -23,7 +23,7 @@ class GnuplotScript
       cols = line.split(",")
       next if cols[0].length != "yyyy-mm-dd-hh:mm:ss".length
       if Date.parse(cols[0]) <= CONSTANTS[:end_date] && Date.parse(cols[0]) >= CONSTANTS[:start_date]
-        quakes << %Q/set arrow from '#{cols[0]}', graph 0 to '#{cols[0]}', graph 1 nohead lw 3\n/
+        quakes << %Q/set arrow from '#{cols[0]}', graph 0 to '#{cols[0]}', graph 1 nohead lw 1\n/
         quakes << %Q/set label right "#{cols[1].chomp}\\n#{cols[0]}" at '#{cols[0]}', graph 0.98\n/
       end
     end
