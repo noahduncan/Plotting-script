@@ -16,9 +16,9 @@ CONSTANTS.merge!({
   :offset => 2000,                                                   # Change this to change the separation distance of the meter plots
   :gphone_user => "mgl_admin",                                       # Global username for gPhone http file access
   :gphone_pass => "gravity",                                         # Global password for gPhone https file access
-  :www_ftp_server => "ftp.microglacoste.com",                        # WWW Ftp Sever address if you are uploading to a website 
-  :www_ftp_user => "microgla",                                       # Ftp username
-  :www_ftp_pass => "microg422",                                      # Ftp Password
+  :www_ftp_server => "ftp.someserver.com",                           # WWW Ftp Sever address if you are uploading to a website 
+  :www_ftp_user => "********",                                       # Ftp username
+  :www_ftp_pass => "*********",                                      # Ftp Password
   :www_ftp_path => "public_html",                                    # Path to navigate to on ftp server
   :tsf_file_path => "tsf_files/",                                    # Path to where tsf_files should be stored
   :ftp_script_path => "outputs/ftp.txt",                             # Path to where ftp script will be saved
@@ -34,6 +34,6 @@ CONSTANTS.merge!({
 # (i.e. if you enter ...gPhone 95... when the file is ...gPhone 095.. this script will error and exit)
 METERS = [
   ["gPhone 095","10.0.1.119","Boulder, CO"],
-  ["gPhone 097","216.254.148.51","Toronto, Canada"]
+  ["gPhone 097","ip.or.url","Toronto, Canada"]
 ]
 ###############=================  End Editable Section =================##################
